@@ -1,0 +1,142 @@
+---
+title: "Tidyverse Reading and Manipulating Data"
+format: html
+editor: visual
+---
+
+```{r}
+#|echo: false
+library(dplyr)
+library(readr)
+library(purrr)
+library(curl)
+library(readxl)
+```
+
+## Task 1
+
+1.  If your working directory is myfolder/homework/, what relative path would you specify to get the file located at myfolder/MyData.csv?
+
+> We could specify ../MyData.csv.
+
+2.  What are the major benefits of using R projects?
+
+> R projects ensure that your project working directory is correctly set and can keep tabs on your scripts and imports, essentially forming an encapsulated version of your work.
+
+3.  What is git and what is github?
+
+> Git is version control software that allows us to maintain a history of changes to code. Github is a service that maintains web-based repositories for us.
+
+4.  What are the two main differences between a tibble and a data.frame?
+
+> A tibble does "fancy" printing of data and does not coerce selection with \[\] into vectors.
+
+5.  Rewrite the following nested function call using BaseR’s chaining operator:
+
+```         
+arrange(filter(select(as_tibble(iris), starts_with("Petal"), Species),
+Petal.Length < 1.55), Species)
+```
+
+```{r}
+as_tibble(iris) |> 
+  select(starts_with("Petal"), Species) |> 
+  filter(Petal.Length < 1.55) |> 
+  arrange(Species)
+```
+
+## Task 2 Glass
+
+read data and add column names
+
+```{r}
+glass_cols <- c("Id", "RI", "Na", "Mg", "Al", "Si", "K", "Ca", "Ba", "Fe", "Type of Glass")
+
+glass_tbl <- read_csv("https://www4.stat.ncsu.edu/online/datasets/glass.data", col_names = glass_cols) 
+```
+
+create a factor to represent the types of glass, then pass to filter with our conditions
+
+```{r}
+glass_type_labels <- c(" building_windows_float_processed",
+                       " building_windows_non_float_processed",
+                       "vehicle_windows_float_processed",
+                       "vehicle_windows_non_float_processed",
+                       "containers",
+                       "tableware",
+                       "headlamps")
+
+glass_tbl |> 
+  mutate(`Type of Glass` = factor(`Type of Glass`, levels = seq(1:7), labels = glass_type_labels)) |> 
+  filter(Fe < .2 & (`Type of Glass` == "tableware" | `Type of Glass` == "headlamps"))
+```
+
+## Task 2 Yeast
+
+read, add column names, and remove undesired columns
+
+```{r}
+yeast_cols <- c("seq_name", "mcg", "gvh", "alm", "mit", "erl", "pox", "vac", "nuc", "class")
+yeast_col_widths <- c(12, 6, 6, 6, 6, 6, 6, 6, 6, 3)
+
+yeast_dl <- curl("https://www4.stat.ncsu.edu/online/datasets/yeast.data")
+yeast_tbl <- read_fwf("https://www4.stat.ncsu.edu/online/datasets/yeast.data",
+                      col_positions = fwf_widths(widths = yeast_col_widths, col_names = yeast_cols)) |> 
+  select(-seq_name, -nuc)
+```
+
+add mean and medians by class
+
+```{r}
+yeast_tbl |> 
+  group_by(class) |> 
+  mutate(across(where(is.numeric), list(mean = mean, med = median), .names = "{.col}_{.fn}"))
+```
+
+## Task 3
+
+import and print white wine data
+
+```{r}
+white_wine_tbl <- read_xlsx("./data/white-wine.xlsx", sheet = 1)
+white_wine_tbl
+```
+
+read names and apply to previous tibble, then add white column
+
+```{r}
+white_wine_cols <- read_xlsx("./data/white-wine.xlsx", sheet = 2) |> 
+  pull(1)
+
+white_wine_tbl <- white_wine_tbl |> 
+  set_names(white_wine_cols) |> 
+  mutate(color = "white")
+
+white_wine_tbl
+```
+
+read and replace variable names as above, but for red wine this time
+
+```{r}
+red_wine_tbl <- read_delim("https://www4.stat.ncsu.edu/~online/datasets/red-wine.csv", col_names = FALSE, delim = ";", skip = 1)
+
+red_wine_tbl <- red_wine_tbl |> 
+  set_names(white_wine_cols) |> 
+  mutate(color = "red")
+
+red_wine_tbl
+```
+
+now we combine and use a chain to filter, sort, select, and summarize
+
+```{r}
+wine_tbl <- bind_rows(red_wine_tbl, white_wine_tbl) |> 
+  filter(quality > 6.5 & alcohol < 132) |> 
+  arrange(desc(quality)) |> 
+  select(contains("acid"), alcohol, color, quality) |> 
+  group_by(quality) |> 
+  mutate(qual_grp_alc_mean = mean(alcohol), qual_grp_alc_sd = sd(alcohol))
+
+wine_tbl
+```
+
